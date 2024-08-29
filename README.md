@@ -19,3 +19,5 @@ packages.${pkgs.system}.default.withPlugins {
   vendorHash = lib.fakeHash;
 }
 ```
+
+I built this for my personal use, but if you have any problems with it, feel free to open an issue. I also accept PRs if you want to improve stuff. I don't know if this repo will really be relevant in 3 months, but for the moment it's kinda useful to have. :)
