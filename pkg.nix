@@ -3,90 +3,65 @@
   buildGoModule,
   fetchFromGitHub,
   gnused,
+  installShellFiles,
   nixosTests,
   caddy,
   testers,
-  installShellFiles,
-  externalPlugins ? [],
-  vendorHash ? "sha256-YNcQtjPGQ0XMSog+sWlH4lG/QdbdI0Lyh/fUGqQUFaY=",
+  stdenv,
 }: let
-  attrsToModules = attrs:
-    builtins.map ({
-      name,
-      repo,
-      version,
-    }: "${repo}")
-    attrs;
-  attrsToSources = attrs:
-    builtins.map ({
-      name,
-      repo,
-      version,
-    }: "${repo}@${version}")
-    attrs;
-in
-  buildGoModule rec {
-    pname = "caddy";
-    version = "2.7.5";
+  attrsToModule = map (plugin: plugin.repo);
+  attrsToVersionedModule = map ({
+    repo,
+    version,
+    ...
+  }:
+    lib.escapeShellArg "${repo}@${version}");
 
-    dist = fetchFromGitHub {
-      owner = "caddyserver";
-      repo = "dist";
-      rev = "v${version}";
-      hash = "sha256-aZ7hdAZJH1PvrX9GQLzLquzzZG3LZSKOvt7sWQhTiR8=";
-    };
+  pname = "caddy";
+  version = "2.8.4";
 
-    src = fetchFromGitHub {
-      owner = "caddyserver";
-      repo = "caddy";
-      rev = "v${version}";
-      hash = "sha256-0IZZ7mkEzZI2Y8ed//m0tbBQZ0YcCXA0/b10ntNIXUk=";
-    };
+  dist = fetchFromGitHub {
+    owner = "caddyserver";
+    repo = "dist";
+    rev = "v${version}";
+    hash = "sha256-O4s7PhSUTXoNEIi+zYASx8AgClMC5rs7se863G6w+l0=";
+  };
 
-    inherit vendorHash;
+  src = fetchFromGitHub {
+    owner = "caddyserver";
+    repo = "caddy";
+    rev = "v${version}";
+    hash = "sha256-CBfyqtWp3gYsYwaIxbfXO3AYaBiM7LutLC7uZgYXfkQ=";
+  };
 
-    subPackages = ["cmd/caddy"];
+  subPackages = ["cmd/caddy"];
 
-    ldflags = [
-      "-s"
-      "-w"
-      "-X github.com/caddyserver/caddy/v2.CustomVersion=${version}"
-    ];
+  ldflags = [
+    "-s"
+    "-w"
+    "-X github.com/caddyserver/caddy/v2.CustomVersion=${version}"
+  ];
 
-    nativeBuildInputs = [gnused installShellFiles];
+  # matches upstream since v2.8.0
+  tags = ["nobadger"];
 
-    modBuildPhase = ''
-      for module in ${builtins.toString (attrsToModules externalPlugins)}; do
-        sed -i "/standard/a _ \"$module\"" ./cmd/caddy/main.go
-      done
-      for plugin in ${builtins.toString (attrsToSources externalPlugins)}; do
-        go get $plugin
-      done
+  nativeBuildInputs = [
+    gnused
+    installShellFiles
+  ];
 
-      go generate
-      go mod vendor
-    '';
-
-    modInstallPhase = ''
-      mv -t vendor go.mod go.sum
-      cp -r --reflink=auto vendor "$out"
-    '';
-
-    preBuild = ''
-      chmod -R u+w vendor
-      [ -f vendor/go.mod ] && mv -t . vendor/go.{mod,sum}
-      go generate
-
-      for module in ${builtins.toString (attrsToModules externalPlugins)}; do
-        sed -i "/standard/a _ \"$module\"" ./cmd/caddy/main.go
-      done
-    '';
-
-    postInstall = ''
+  postInstall =
+    ''
       install -Dm644 ${dist}/init/caddy.service ${dist}/init/caddy-api.service -t $out/lib/systemd/system
 
-      substituteInPlace $out/lib/systemd/system/caddy.service --replace "/usr/bin/caddy" "$out/bin/caddy"
-      substituteInPlace $out/lib/systemd/system/caddy-api.service --replace "/usr/bin/caddy" "$out/bin/caddy"
+      substituteInPlace $out/lib/systemd/system/caddy.service \
+        --replace-fail "/usr/bin/caddy" "$out/bin/caddy"
+      substituteInPlace $out/lib/systemd/system/caddy-api.service \
+        --replace-fail "/usr/bin/caddy" "$out/bin/caddy"
+    ''
+    + lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+      # Generating man pages and completions fail on cross-compilation
+      # https://github.com/NixOS/nixpkgs/issues/308283
 
       $out/bin/caddy manpage --directory manpages
       installManPage manpages/*
@@ -97,19 +72,83 @@ in
         --zsh <($out/bin/caddy completion zsh)
     '';
 
-    passthru.tests = {
-      inherit (nixosTests) caddy;
-      version = testers.testVersion {
-        command = "${caddy}/bin/caddy version";
-        package = caddy;
-      };
-    };
+  meta = with lib; {
+    homepage = "https://caddyserver.com";
+    description = "Fast and extensible multi-platform HTTP/1-2-3 web server with automatic HTTPS";
+    license = licenses.asl20;
+    mainProgram = "caddy";
+    maintainers = with maintainers; [
+      Br1ght0ne
+      emilylange
+      techknowlogick
+    ];
+  };
+in
+  buildGoModule {
+    inherit
+      pname
+      version
+      src
+      subPackages
+      ldflags
+      tags
+      nativeBuildInputs
+      postInstall
+      meta
+      ;
 
-    meta = with lib; {
-      homepage = "https://caddyserver.com";
-      description = "Fast and extensible multi-platform HTTP/1-2-3 web server with automatic HTTPS";
-      license = licenses.asl20;
-      mainProgram = "caddy";
-      maintainers = with maintainers; [Br1ght0ne emilylange techknowlogick];
+    vendorHash = "sha256-1Api8bBZJ1/oYk4ZGIiwWCSraLzK9L+hsKXkFtk6iVM=";
+
+    passthru = {
+      withPlugins = {
+        caddyModules,
+        vendorHash ? lib.fakeHash,
+      }:
+        buildGoModule {
+          pname = "${caddy.pname}-with-plugins";
+
+          inherit
+            version
+            src
+            subPackages
+            ldflags
+            tags
+            nativeBuildInputs
+            postInstall
+            meta
+            ;
+
+          modBuildPhase = ''
+            for module in ${toString (attrsToModule caddyModules)}; do
+              sed -i "/standard/a _ \"$module\"" ./cmd/caddy/main.go
+            done
+            for plugin in ${toString (attrsToVersionedModule caddyModules)}; do
+              go get $plugin
+            done
+            go mod vendor
+          '';
+
+          modInstallPhase = ''
+            mv -t vendor go.mod go.sum
+            cp -r vendor "$out"
+          '';
+
+          preBuild = ''
+            chmod -R u+w vendor
+            [ -f vendor/go.mod ] && mv -t . vendor/go.{mod,sum}
+            for module in ${toString (attrsToModule caddyModules)}; do
+              sed -i "/standard/a _ \"$module\"" ./cmd/caddy/main.go
+            done
+          '';
+
+          inherit vendorHash;
+        };
+      tests = {
+        inherit (nixosTests) caddy;
+        version = testers.testVersion {
+          command = "${caddy}/bin/caddy version";
+          package = caddy;
+        };
+      };
     };
   }

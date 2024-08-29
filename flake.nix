@@ -17,13 +17,27 @@
       };
       lib = pkgs.lib;
       caddyWithPlugins = pkgs.callPackage ./pkg.nix {};
-      caddyWithL4 = caddyWithPlugins.override {
-        externalPlugins =
+    in let
+      # Caddy Layer4 modules
+      l4CaddyModules = lib.lists.map (name: {
+        inherit name;
+        repo = "github.com/mholt/caddy-l4";
+        version = "3d22d6da412883875f573ee4ecca3dbb3fdf0fd0";
+      }) ["layer4" "modules/l4proxy" "modules/l4tls" "modules/l4proxyprotocol"];
+    in {
+      packages.default = caddyWithPlugins;
+      packages.baseCaddy = caddyWithPlugins.withPlugins {caddyModules = [];};
+      packages.caddyWithL4 = caddyWithPlugins.withPlugins {
+        caddyModules = l4CaddyModules;
+        vendorHash = "sha256-cpRtLb81BLu6kJqYBVc02/xOK42fjoOn7rokY8hzXgM=";
+      };
+      packages.caddyWithMany = caddyWithPlugins.withPlugins {
+        caddyModules =
           [
             {
               name = "transform-encoder";
               repo = "github.com/caddyserver/transform-encoder";
-              version = "58ebafa572d531b301fdbc6e2fd139766bac7e8d";
+              version = "f627fc4f76334b7aef8d4ed8c99c7e2bcf94ac7d";
             }
             {
               name = "connegmatcher";
@@ -31,19 +45,8 @@
               version = "v0.1.4";
             }
           ]
-          ++ (
-            # Caddy Layer4 modules
-            lib.lists.map (name: {
-              inherit name;
-              repo = "github.com/mholt/caddy-l4";
-              version = "f3a880d4c01c884f4a096ccceb6c6d1e2d1d983d";
-            }) ["layer4" "modules/l4proxy" "modules/l4tls" "modules/l4proxyprotocol"]
-          );
-        # vendorHash = "sha256-7cRI65foALEsfYhvdGresq7oma/cIsnVtbq+Gan5DCU=";
-        vendorHash = "sha256-jF+g3Vu+T92sotReOpskT07YPG+UdW+1pDsa+z4p0Y4=";
+          ++ l4CaddyModules;
+        vendorHash = "sha256-OjyJdcbLMSvgkHKR4xMF0BgsuA5kdKgDgV+ocuNHUf4=";
       };
-    in {
-      inherit caddyWithPlugins caddyWithL4;
-      packages.default = caddyWithL4;
     });
 }
