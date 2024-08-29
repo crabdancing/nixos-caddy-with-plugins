@@ -2,10 +2,10 @@ With thanks to @airone01 for [helping with getting this fully declarative](https
 
 This repo uses a newer (and better) method than the 'manually call golang commands' one everyone's been using for awhile.
 
-You can simply call `output.default.caddyWithMany` if you want a default collection of plugins, or you can build your on by calling:
+You can simply call `packages.${pkgs.system}.caddyWithMany` if you want a default collection of plugins, or you can build your on by calling:
 
 ```nix
-output.default.withPlugins {
+packages.${pkgs.system}.default.withPlugins {
   caddyModules = [
     # example module to integrate
     {
