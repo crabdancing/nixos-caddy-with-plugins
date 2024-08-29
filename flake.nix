@@ -31,7 +31,7 @@
         caddyModules = l4CaddyModules;
         vendorHash = "sha256-cpRtLb81BLu6kJqYBVc02/xOK42fjoOn7rokY8hzXgM=";
       };
-      packages.caddyWithMany = caddyWithPlugins.withPlugins {
+      caddyWithMany = caddyWithPlugins.withPlugins {
         caddyModules =
           [
             {
