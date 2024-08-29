@@ -4,7 +4,7 @@ This repo uses a newer (and better) method than the 'manually call golang comman
 
 You can simply call `output.default.caddyWithMany` if you want a default collection of plugins, or you can build your on by calling:
 
-```
+```nix
 output.default.withPlugins {
   caddyModules = [
     # example module to integrate
@@ -19,10 +19,3 @@ output.default.withPlugins {
   vendorHash = lib.fakeHash;
 }
 ```
-
----
-
-Q: Why is this helpful?
-A: Lets you declaratively install plugins for Caddy with full reproducibility and abstracts away golang tooling.
-
-Q: 
